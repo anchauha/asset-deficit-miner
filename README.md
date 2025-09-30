@@ -4,8 +4,6 @@ A web application that performs real-time semantic analysis on user provided doc
 
 This project is a pipeline designed to analyze community development texts and identify **asset-based** versus **deficit-based** language patterns. The pipeline was built as part of research into language use in community development contexts, showcasing applied skills in **machine learning, natural language processing, and full-stack deployment**.
 
----
-
 ## Overview
 
 * **Input**: URLs of community development articles/documents
@@ -15,8 +13,6 @@ This project is a pipeline designed to analyze community development texts and i
 ![Golem Writing Assistant](images/Golem-Writing-Assistant.jpg)
 
 *The interactive web interface provides real-time asset/deficit language analysis as you type, highlighting patterns and providing confidence scores for immediate feedback.*
-
----
 
 ## Directory Structure
 
@@ -48,8 +44,6 @@ center/
 └── README.md
 ```
 
----
-
 ## Pipeline Stages
 
 ### Stage 1: Web Content Extraction (`crawler/`)
@@ -61,8 +55,6 @@ cd crawler
 python url_extractor.py --csv_file data/input/urls.csv --url_column URL
 ```
 
----
-
 ### Stage 2: LLM Analysis & Labeling (`process_with_llm/`)
 
 Use large language models (HuggingFace or Ollama) to label text spans as **asset-based** or **deficit-based**.
@@ -72,8 +64,6 @@ cd process_with_llm
 python scripts/process_with_huggingface.py --input ../crawler/data/output/results.json
 ```
 
----
-
 ### Stage 3: BERT Fine-Tuning (`bert_finetuning/`)
 
 Train a BERT model for token-level classification based on the labeled dataset.
@@ -82,8 +72,6 @@ Train a BERT model for token-level classification based on the labeled dataset.
 cd bert_finetuning
 python scripts/main.py train --input ../process_with_llm/data/output/labeled_data.json
 ```
-
----
 
 ### Stage 4: Web Application (`bert_webapp/`)
 
@@ -96,8 +84,6 @@ python model_loader.py --copy
 ```
 
 Access at: `http://localhost:5000`
-
----
 
 ## Quick Start
 
@@ -118,8 +104,6 @@ python model_loader.py --copy
 ./start_service.sh
 ```
 
----
-
 ## Detailed Workflow
 
 ```
@@ -133,8 +117,6 @@ Fine-tuned BERT Model
     ↓
 Web Application
 ```
-
----
 
 ## Troubleshooting
 
