@@ -1,0 +1,30 @@
+{
+  "model_name": "bert-base-uncased",
+  "num_labels": 5,
+  "max_length": 71,
+  "label_names": [
+    "O",
+    "B-ASSET",
+    "I-ASSET",
+    "B-DEFICIT",
+    "I-DEFICIT"
+  ],
+  "training_params": {
+    "model_name": "bert-base-uncased",
+    "num_labels": 5,
+    "max_length": 71,
+    "batch_size": 16,
+    "learning_rate": 2e-05,
+    "num_epochs": 56,
+    "warmup_ratio": 0.1,
+    "weight_decay": 0.01,
+    "max_grad_norm": 1.0,
+    "save_dir": "models/my_model",
+    "device": "cuda",
+    "save_best_only": true,
+    "patience": 3,
+    "eval_strategy": "epoch",
+    "eval_steps": 500,
+    "logging_steps": 100
+  }
+}

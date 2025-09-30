@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time AI Writing Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                     colors: {
+                        asset: {
+                            light: '#dcfce7', // green-100
+                            dark: '#166534',  // green-800
+                            text: '#16a34a', // green-600
+                        },
+                        deficit: {
+                            light: '#fee2e2', // red-100
+                            dark: '#991b1b',  // red-800
+                            text: '#ef4444', // red-500
+                        },
+                    },
+                }
+            },
+            darkMode: 'class'
+        }
+    </script>
+    <style>
+        .asset-keyword, .deficit-keyword {
+            transition: all 0.2s ease-in-out;
+            font-weight: 500;
+            padding: 1px 4px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .asset-keyword { background-color: #dcfce7; color: #166534; }
+        .dark .asset-keyword { background-color: #14532d; color: #dcfce7; }
+        .deficit-keyword { background-color: #fee2e2; color: #991b1b; }
+        .dark .deficit-keyword { background-color: #7f1d1d; color: #fee2e2; }
+        #writing-space {
+            /* FIX: Prevents pasted text from overflowing the container */
+            overflow-wrap: break-word;
+        }
+        #writing-space:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        .loader {
+            width: 16px; height: 16px; border: 2px solid #3b82f6;
+            border-bottom-color: transparent; border-radius: 50%;
+            display: inline-block; box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-gray-900 text-slate-800 dark:text-slate-200">
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">🧠 Golem Real-Time Writing Assistant</h1>
+            <p class="text-md text-slate-600 dark:text-slate-400 mt-2">Get instant feedback from finetuned BERT model as you type.</p>
+        </header>
+
+        <main class="space-y-8">
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-slate-200 dark:border-gray-700">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                    <div class="col-span-1">
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Filter by Label</label>
+                        <div id="filter-buttons" class="flex space-x-2">
+                            <button data-filter="ALL" class="filter-btn active flex-1 bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-semibold">All</button>
+                            <button data-filter="ASSET" class="filter-btn flex-1 bg-slate-200 dark:bg-gray-700 px-4 py-2 rounded-md text-sm font-semibold">Assets</button>
+                            <button data-filter="DEFICIT" class="filter-btn flex-1 bg-slate-200 dark:bg-gray-700 px-4 py-2 rounded-md text-sm font-semibold">Deficits</button>
+                        </div>
+                    </div>
+                    <div class="col-span-1">
+                        <label for="confidence-slider" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            Confidence Threshold: <span id="confidence-value" class="font-bold">0.75</span>
+                        </label>
+                        <input id="confidence-slider" type="range" min="0.5" max="1.0" value="0.75" step="0.01" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700">
+                    </div>
+                    <div class="col-span-1 flex justify-center md:justify-end items-center">
+                        <label for="darkModeToggle" class="mr-3 text-sm font-medium">Dark Mode</label>
+                        <button id="darkModeToggle" class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors bg-slate-200 dark:bg-gray-600 focus:outline-none">
+                            <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform translate-x-1 dark:translate-x-6"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-slate-200 dark:border-gray-700">
+                 <div id="writing-space"
+                     contenteditable="true"
+                     class="w-full min-h-[200px] text-lg leading-relaxed whitespace-pre-wrap focus:outline-none dark:text-white"
+                     placeholder="Describe a time you demonstrated leadership...">
+                </div>
+                <div id="model-status" class="text-right text-xs text-slate-400 dark:text-slate-500 pt-2 h-4">Ready</div>
+            </div>
+            
+            <div id="stats-container" class="hidden"></div>
+            
+            <div id="table-container" class="hidden bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-slate-200 dark:border-gray-700">
+                <h2 class="text-2xl font-bold mb-4 text-slate-900 dark:text-white">Detected Spans</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
+                        <thead class="bg-slate-50 dark:bg-gray-700">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Label</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Text</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody id="spans-table-body" class="bg-white dark:bg-gray-800 divide-y divide-slate-200 dark:divide-gray-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- State ---
+            let lastAnalysisData = null;
+            let currentFilter = 'ALL';
+            let confidenceThreshold = 0.75;
+            let debounceTimer;
+            let history = [{ text: '' }];
+            let historyIndex = 0;
+            let isUpdatingContent = false; // Flag to prevent event loops
+            let isUserTyping = false; // Flag to track if user is actively typing
+
+            // --- DOM Elements ---
+            const writingSpace = document.getElementById('writing-space');
+            const modelStatus = document.getElementById('model-status');
+            const statsContainer = document.getElementById('stats-container');
+            const tableContainer = document.getElementById('table-container');
+            const spansTableBody = document.getElementById('spans-table-body');
+            const filterButtons = document.getElementById('filter-buttons');
+            const confidenceSlider = document.getElementById('confidence-slider');
+            const confidenceValue = document.getElementById('confidence-value');
+            const darkModeToggle = document.getElementById('darkModeToggle');
+
+            // --- Initialization ---
+            initializeDarkMode();
+            initializePlaceholder();
+            history = [{ text: writingSpace.textContent === writingSpace.getAttribute('placeholder') ? '' : writingSpace.textContent }];
+            
+            // --- Event Listeners ---
+            writingSpace.addEventListener('input', () => {
+                if (isUpdatingContent) return; // Ignore programmatic changes
+
+                isUserTyping = true;
+                const currentText = writingSpace.textContent;
+                if (history[historyIndex].text !== currentText) {
+                    history = history.slice(0, historyIndex + 1);
+                    history.push({ text: currentText });
+                    historyIndex++;
+                }
+                
+                modelStatus.textContent = `Typing...`;
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    isUserTyping = false;
+                    handleAnalysis();
+                }, 1000);
+            });
+
+            writingSpace.addEventListener('keydown', (e) => {
+                if (e.ctrlKey || e.metaKey) { // metaKey for macOS
+                    if (e.key === 'z') {
+                        e.preventDefault();
+                        undo();
+                    } else if (e.key === 'y') {
+                        e.preventDefault();
+                        redo();
+                    }
+                }
+            });
+
+            confidenceSlider.addEventListener('input', e => {
+                confidenceThreshold = parseFloat(e.target.value);
+                confidenceValue.textContent = confidenceThreshold.toFixed(2);
+                render();
+            });
+
+            filterButtons.addEventListener('click', e => {
+                if (e.target.tagName === 'BUTTON') {
+                    currentFilter = e.target.dataset.filter;
+                    document.querySelectorAll('.filter-btn').forEach(btn => {
+                        btn.classList.remove('active', 'bg-blue-500', 'text-white');
+                        btn.classList.add('bg-slate-200', 'dark:bg-gray-700');
+                    });
+                    e.target.classList.add('active', 'bg-blue-500', 'text-white');
+                    e.target.classList.remove('bg-slate-200', 'dark:bg-gray-700');
+                    render();
+                }
+            });
+
+            darkModeToggle.addEventListener('click', () => {
+                document.documentElement.classList.toggle('dark');
+                localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'));
+            });
+
+            document.body.addEventListener('click', e => {
+                const target = e.target;
+                const spanIndex = target.closest('[data-span-index]')?.dataset.spanIndex;
+                if (spanIndex) {
+                    highlightSpan(spanIndex);
+                }
+            });
+
+            // --- Core Functions ---
+            async function handleAnalysis() {
+                const text = writingSpace.textContent;
+                if (!text || text.trim() === '' || text === writingSpace.getAttribute('placeholder')) {
+                    modelStatus.textContent = 'Ready';
+                    lastAnalysisData = null;
+                    render();
+                    return;
+                }
+
+                modelStatus.innerHTML = `<div class="loader inline-block mr-1"></div>Analyzing ${text.length} chars...`;
+
+                try {
+                    const response = await fetch('/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: text })
+                    });
+                    if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+                    
+                    const data = await response.json();
+                    if (!data.success) throw new Error(data.error || 'Analysis failed');
+                    
+                    lastAnalysisData = data;
+                    
+                    isUpdatingContent = true;
+                    // Save cursor position before modifying DOM
+                    const cursorPos = saveCursorPosition(writingSpace);
+                    
+                    render();
+                    
+                    // Restore cursor position after DOM modification with better error handling
+                    setTimeout(() => {
+                        if (cursorPos !== null) {
+                            restoreCursorPosition(writingSpace, cursorPos);
+                        }
+                        isUpdatingContent = false;
+                    }, 0);
+                    
+                    modelStatus.textContent = `✓ Synced (${data.spans.length} spans)`;
+
+                } catch (error) {
+                    console.error("Analysis failed:", error);
+                    modelStatus.textContent = `✗ Error: ${error.message}`;
+                    isUpdatingContent = false;
+                }
+            }
+            
+            function undo() {
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    const textToRestore = history[historyIndex].text;
+                    isUpdatingContent = true;
+                    writingSpace.textContent = textToRestore;
+                    isUpdatingContent = false;
+                    handleAnalysis();
+                }
+            }
+
+            function redo() {
+                if (historyIndex < history.length - 1) {
+                    historyIndex++;
+                    const textToRestore = history[historyIndex].text;
+                    isUpdatingContent = true;
+                    writingSpace.textContent = textToRestore;
+                    isUpdatingContent = false;
+                    handleAnalysis();
+                }
+            }
+
+            function render() {
+                if (!lastAnalysisData) {
+                    statsContainer.classList.add('hidden');
+                    tableContainer.classList.add('hidden');
+                    return;
+                }
+                
+                statsContainer.classList.remove('hidden');
+                tableContainer.classList.remove('hidden');
+
+                const filteredSpans = lastAnalysisData.spans
+                    .filter(span => currentFilter === 'ALL' || span.label === currentFilter)
+                    .filter(span => span.confidence >= confidenceThreshold);
+
+                reconstructContent(lastAnalysisData.text, filteredSpans);
+                renderStats(filteredSpans, lastAnalysisData.text);
+                renderTable(filteredSpans);
+            }
+
+            function reconstructContent(originalText, spans) {
+                let content = '';
+                let lastIndex = 0;
+                
+                spans.forEach((span, index) => {
+                    const originalIndex = lastAnalysisData.spans.indexOf(span);
+                    content += escapeHtml(originalText.slice(lastIndex, span.start_char));
+                    const className = span.label === 'ASSET' ? 'asset-keyword' : 'deficit-keyword';
+                    content += `<span class="${className}" data-span-index="${originalIndex}">${escapeHtml(span.text)}</span>`;
+                    lastIndex = span.end_char;
+                });
+                content += escapeHtml(originalText.slice(lastIndex));
+                
+                // Only update innerHTML if content has actually changed
+                if (writingSpace.innerHTML !== content) {
+                    writingSpace.innerHTML = content;
+                }
+            }
+            
+            function renderStats(spans, text) {
+                const stats = calculateStatistics(spans, text);
+                const statCards = [
+                    { label: 'Total Spans', value: stats.total_spans },
+                    { label: 'Asset Spans', value: stats.asset_count },
+                    { label: 'Deficit Spans', value: stats.deficit_count },
+                    { label: 'Avg. Confidence', value: stats.avg_confidence.toFixed(3) },
+                    { label: 'Text Coverage', value: `${stats.text_coverage.toFixed(1)}%` },
+                    { label: 'Avg. Span Length', value: `${stats.avg_span_length.toFixed(0)} chars` }
+                ];
+                statsContainer.innerHTML = `
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        ${statCards.map(card => `
+                            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md text-center border border-slate-200 dark:border-gray-700">
+                                <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">${card.value}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold tracking-wider">${card.label}</p>
+                            </div>`).join('')}
+                    </div>`;
+            }
+
+            function renderTable(spans) {
+                spansTableBody.innerHTML = spans.map((span) => {
+                    const originalIndex = lastAnalysisData.spans.indexOf(span);
+                    const labelClass = span.label === 'ASSET' ? 'bg-asset-light text-asset-text dark:bg-asset-dark dark:text-asset-light' : 'bg-deficit-light text-deficit-text dark:bg-deficit-dark dark:text-deficit-light';
+                    return `
+                    <tr data-span-index="${originalIndex}" class="hover:bg-slate-100 dark:hover:bg-gray-700 cursor-pointer">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${labelClass}">${span.label}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-normal">${escapeHtml(span.text)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap font-mono text-sm">${span.confidence.toFixed(3)}</td>
+                    </tr>`;
+                }).join('');
+            }
+            
+            // --- Helper Functions ---
+             function calculateStatistics(spans, text) {
+                if (!spans || spans.length === 0) return { total_spans: 0, asset_count: 0, deficit_count: 0, avg_confidence: 0, text_coverage: 0, avg_span_length: 0 };
+                const asset_count = spans.filter(s => s.label === 'ASSET').length;
+                const deficit_count = spans.filter(s => s.label === 'DEFICIT').length;
+                const avg_confidence = spans.length > 0 ? spans.reduce((sum, s) => sum + s.confidence, 0) / spans.length : 0;
+                const total_span_chars = spans.reduce((sum, s) => sum + (s.end_char - s.start_char), 0);
+                const text_coverage = text.length > 0 ? (total_span_chars / text.length) * 100 : 0;
+                const avg_span_length = spans.length > 0 ? total_span_chars / spans.length : 0;
+                return { total_spans: spans.length, asset_count, deficit_count, avg_confidence, text_coverage, avg_span_length };
+            }
+
+            function highlightSpan(index) {
+                document.querySelectorAll('.ring-2.ring-blue-500').forEach(el => el.classList.remove('ring-2', 'ring-blue-500'));
+                const markEl = writingSpace.querySelector(`[data-span-index='${index}']`);
+                const rowEl = spansTableBody.querySelector(`[data-span-index='${index}']`);
+                if (markEl) {
+                    markEl.classList.add('ring-2', 'ring-blue-500');
+                    markEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                if (rowEl) {
+                    rowEl.classList.add('ring-2', 'ring-blue-500');
+                    rowEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+
+            function initializeDarkMode() {
+                const ls = localStorage.getItem('darkMode');
+                if (ls === 'true' || (!ls && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                }
+            }
+
+            function initializePlaceholder() {
+                 if (!writingSpace.textContent.trim()) {
+                    writingSpace.textContent = writingSpace.getAttribute('placeholder');
+                    writingSpace.style.color = 'gray';
+                }
+                writingSpace.addEventListener('focus', function() {
+                    if (this.textContent === this.getAttribute('placeholder')) {
+                        this.textContent = '';
+                        this.style.color = '';
+                    }
+                });
+                writingSpace.addEventListener('blur', function() {
+                    if (!this.textContent.trim()) {
+                        this.textContent = this.getAttribute('placeholder');
+                        this.style.color = 'gray';
+                    }
+                });
+            }
+
+            function saveCursorPosition(context) {
+                try {
+                    const selection = window.getSelection();
+                    if (selection.rangeCount === 0) return null;
+                    
+                    const range = selection.getRangeAt(0);
+                    const preSelectionRange = range.cloneRange();
+                    preSelectionRange.selectNodeContents(context);
+                    preSelectionRange.setEnd(range.startContainer, range.startOffset);
+                    
+                    // Get the text content up to cursor position
+                    const textContent = preSelectionRange.toString();
+                    return textContent.length;
+                } catch(e) {
+                    console.error("Failed to save cursor position:", e);
+                    return null;
+                }
+            }
+
+            function restoreCursorPosition(context, savedPos) {
+                if (savedPos === null || savedPos === undefined) return;
+                
+                try {
+                    const treeWalker = document.createTreeWalker(
+                        context, 
+                        NodeFilter.SHOW_TEXT, 
+                        null, 
+                        false
+                    );
+                    
+                    let charCount = 0;
+                    let textNode;
+                    
+                    while (textNode = treeWalker.nextNode()) {
+                        const nextCharCount = charCount + textNode.textContent.length;
+                        
+                        if (savedPos >= charCount && savedPos <= nextCharCount) {
+                            const range = document.createRange();
+                            const offset = Math.min(savedPos - charCount, textNode.textContent.length);
+                            
+                            range.setStart(textNode, offset);
+                            range.collapse(true);
+                            
+                            const selection = window.getSelection();
+                            selection.removeAllRanges();
+                            selection.addRange(range);
+                            
+                            // Ensure the element has focus
+                            context.focus();
+                            return;
+                        }
+                        charCount = nextCharCount;
+                    }
+                    
+                    // If we couldn't find the exact position, place cursor at the end
+                    const range = document.createRange();
+                    range.selectNodeContents(context);
+                    range.collapse(false);
+                    const selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    context.focus();
+                    
+                } catch(e) {
+                    console.error("Failed to restore cursor position:", e);
+                    // Fallback: just ensure the element has focus
+                    context.focus();
+                }
+            }
+
+            function escapeHtml(text) {
+                const p = document.createElement('p');
+                p.textContent = text;
+                return p.innerHTML;
+            }
+        });
+    </script>
+</body>
+</html>
